@@ -1,11 +1,49 @@
 from connection import get_connection
+from passlib.context import CryptContext
 
+
+secret = CryptContext(schemes = ['argon2'], deprecated = 'auto')
+
+async def hash_password(password):
+    return secret.hash(password)
+
+async def verify_password(password,hashed_password):
+    return secret.verify(password,hashed_password)
+
+async def login(username,password):
+    try:
+        conn = await get_connection()
+        user = await conn.fetchrow("""
+        SELECT * FROM users WHERE username = $1 and is_active = true
+    """,username)
+        verify = await verify_password(password, user["password_hash"])
+        if verify:
+            print(f"Welcome {user['username']}")
+            return user
+    except Exception as error:
+        print("Error in login: ",error)
+    finally:
+        await conn.close()
+
+
+async def register(username,full_name,age,password):
+    try:
+        conn = await get_connection()
+        password_hash = await hash_password(password)
+        print(password_hash)
+        await conn.execute("""
+        INSERT INTO users(username,full_name,age,password_hash)VALUES($1,$2,$3,$4)""",username,full_name,age,password_hash)
+        return await login(username,password)
+    except Exception as error:
+        print("Error in login: ",error)
+    finally:
+        await conn.close()
 
 
 async def add_category(name):
     conn = await get_connection()
     await conn.execute(
-        "INSERT INTO categories(name) VALUES($1)",name)
+        """INSERT INTO categories(name)""",name)
     await conn.close()
     print("Category added!")
 
